@@ -101,13 +101,22 @@ class BintecOsdxClient:
         return url
 
     async def _data_page(self, page: str, menu: str | None = None) -> str:
-        """Fetch an inline data page and roll the SharedTmpSid forward."""
-        text = await self._text(
-            self._data_url(page, menu),
-            headers={"X-Requested-With": "XMLHttpRequest"},
-        )
-        if match := _RE_TMPSID.search(text):
-            self._tmp = match.group(1)
+        """Fetch an inline data page and roll the SharedTmpSid forward.
+
+        The OSDx GUI intermittently returns an empty body; retry a few times
+        before giving up so a single hiccup doesn't blank all entities.
+        """
+        text = ""
+        for attempt in range(4):
+            text = await self._text(
+                self._data_url(page, menu),
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            )
+            if text.strip():
+                if match := _RE_TMPSID.search(text):
+                    self._tmp = match.group(1)
+                return text
+            await asyncio.sleep(0.4)
         return text
 
     async def login(self) -> None:
@@ -143,12 +152,18 @@ class BintecOsdxClient:
             raise BintecOsdxAuthError("Login rejected (no userIdent returned)")
         self._uid = uid.group(1)
 
-        shell = await self._text(
-            f"{self._base}/esi/0.0.0.0/esi.cgi?page=index.xml&userIdent={self._uid}"
-        )
-        tmp = _RE_TMPSID_JS.search(shell) or _RE_TMPSID.search(shell)
+        # The index shell occasionally comes back empty; retry before treating
+        # it as an auth failure (a genuinely wrong password fails every time).
+        tmp = None
+        for attempt in range(5):
+            shell = await self._text(
+                f"{self._base}/esi/0.0.0.0/esi.cgi?page=index.xml&userIdent={self._uid}"
+            )
+            tmp = _RE_TMPSID_JS.search(shell) or _RE_TMPSID.search(shell)
+            if tmp:
+                break
+            await asyncio.sleep(0.5)
         if not tmp:
-            # No session token after login almost always means a bad password.
             raise BintecOsdxAuthError("No session token after login (check password)")
         self._tmp = tmp.group(1)
 
@@ -178,10 +193,12 @@ def parse_stations(xml: str) -> dict[str, dict]:
     stations: dict[str, dict] = {}
     for item in xml.split("<list.item>")[1:]:
         mac_match = re.search(
-            r"Col_mac</list\.property\.name><list\.property\.value>([0-9a-fA-F:]+)",
+            r"Col_mac</list\.property\.name><list\.property\.value>"
+            r"((?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})",
             item,
         )
         if not mac_match:
+            # Skip header/summary rows whose Col_mac isn't a real MAC.
             continue
         mac = mac_match.group(1).lower()
         signal = _prop(item, "Col_signal")
