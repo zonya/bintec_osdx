@@ -23,3 +23,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # 'brands' fails until the domain is submitted to home-assistant/brands;
+          # ignore it during initial development.
+          ignore: brands
