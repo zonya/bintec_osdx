@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from homeassistant.components.device_tracker import ScannerEntity, SourceType
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity_registry import RegistryEntryDisabler
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BintecOsdxConfigEntry
@@ -36,11 +38,31 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_discover))
     _discover()
 
+    # HA's BaseTrackerEntity forces entity_category=DIAGNOSTIC which
+    # disables new tracker entities by default.  Auto-enable every
+    # device_tracker this integration owns so clients appear without
+    # the user having to hunt for them in the registry.
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if (
+            reg_entry.domain == "device_tracker"
+            and reg_entry.disabled_by == RegistryEntryDisabler.INTEGRATION
+        ):
+            registry.async_update_entity(reg_entry.entity_id, disabled_by=None)
+
 
 class BintecOsdxScannerEntity(BintecOsdxEntity, ScannerEntity):
     """Presence of a single WLAN client (associated = home)."""
 
     _attr_has_entity_name = False
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        # BaseTrackerEntity forces DIAGNOSTIC category which makes
+        # ScannerEntity.entity_registry_enabled_default return False for
+        # unknown MACs.  Override so every discovered client is enabled
+        # immediately without manual intervention.
+        return True
 
     def __init__(self, coordinator: BintecOsdxCoordinator, mac: str) -> None:
         super().__init__(coordinator)
