@@ -172,7 +172,11 @@ class BintecOsdxClient:
 
     async def _poll_once(self) -> dict:
         """Pull stations + status using the current session."""
+        prev_tmp = self._tmp
         await self._data_page("navigation.xml")
+        if self._tmp == prev_tmp:
+            # AP returned login HTML (no SharedTmpSid) — session expired.
+            raise BintecOsdxError("Session token stale after navigation page — session expired")
         stations_xml = await self._data_page(*_PAGE_STATIONS)
         status_xml = await self._data_page(*_PAGE_STATUS)
         if not stations_xml.strip() and not status_xml.strip():
