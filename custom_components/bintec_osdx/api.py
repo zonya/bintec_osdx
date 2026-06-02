@@ -170,15 +170,29 @@ class BintecOsdxClient:
         # Required priming step — data pages return empty without it.
         await self._data_page("navigation.xml")
 
-    async def async_get_data(self) -> dict:
-        """Full refresh: (re)login, then pull stations + status."""
-        await self.login()
+    async def _poll_once(self) -> dict:
+        """Pull stations + status using the current session."""
+        await self._data_page("navigation.xml")
         stations_xml = await self._data_page(*_PAGE_STATIONS)
         status_xml = await self._data_page(*_PAGE_STATUS)
+        if not stations_xml.strip() and not status_xml.strip():
+            raise BintecOsdxError("Both data pages empty — session likely expired")
         return {
             "stations": parse_stations(stations_xml),
             "status": parse_status(status_xml),
         }
+
+    async def async_get_data(self) -> dict:
+        """Reuse existing session; re-login once on any failure."""
+        if self._uid is None:
+            await self.login()
+        try:
+            return await self._poll_once()
+        except BintecOsdxError:
+            self._uid = None
+            self._tmp = None
+            await self.login()
+            return await self._poll_once()
 
 
 def _prop(item: str, col: str) -> str | None:

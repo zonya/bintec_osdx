@@ -62,6 +62,42 @@ class BintecOsdxConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_SCHEMA, errors=errors
         )
 
+    async def async_step_reauth(
+        self, user_input: dict[str, Any]
+    ) -> ConfigFlowResult:
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
+        if user_input is not None:
+            client = BintecOsdxClient(
+                async_get_clientsession(self.hass),
+                reauth_entry.data[CONF_HOST],
+                reauth_entry.data[CONF_USERNAME],
+                user_input[CONF_PASSWORD],
+            )
+            try:
+                await client.login()
+            except BintecOsdxAuthError:
+                errors["base"] = "invalid_auth"
+            except BintecOsdxError:
+                errors["base"] = "cannot_connect"
+            else:
+                return self.async_update_reload_and_abort(
+                    reauth_entry,
+                    data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]},
+                )
+        schema = vol.Schema({vol.Required(CONF_PASSWORD): str})
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"host": reauth_entry.data[CONF_HOST]},
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:

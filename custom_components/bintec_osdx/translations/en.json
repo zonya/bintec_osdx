@@ -9,6 +9,13 @@
           "username": "Username",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Bintec OSDx",
+        "description": "Enter the admin password for {host}.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -16,7 +23,8 @@
       "invalid_auth": "Invalid username or password."
     },
     "abort": {
-      "already_configured": "This access point is already configured."
+      "already_configured": "This access point is already configured.",
+      "reauth_successful": "Re-authentication was successful."
     }
   },
   "options": {
