@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bintec OSDx access point",
+        "description": "Enter the AP web-GUI address and the same credentials you use to log in to it.",
+        "data": {
+          "host": "Host or IP address",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the access point.",
+      "invalid_auth": "Invalid username or password."
+    },
+    "abort": {
+      "already_configured": "This access point is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cpu_percent": { "name": "CPU usage" },
+      "memory_percent": { "name": "Memory usage" },
+      "clients_total": { "name": "Connected clients" },
+      "uptime": { "name": "Uptime" },
+      "firmware": { "name": "Firmware version" }
+    }
+  }
+}
