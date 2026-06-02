@@ -30,6 +30,9 @@ _PAGE_STATUS = ("index.xml", "%22sm_status-index%22")
 
 _RE_ADMIN_SALT = re.compile(r"<adminSalt>([^<]+)</adminSalt>")
 _RE_RANDOM_SALT = re.compile(r"<randomSalt>([^<]+)</randomSalt>")
+# Markers present in the login page — if these appear in a data response
+# it means the session expired and the AP redirected us to the login form.
+_RE_LOGIN_PAGE = re.compile(r"sessionLoginName|adminSalt|proclog\.htm")
 _RE_USERIDENT = re.compile(r"userIdent=(\d+)")
 _RE_TMPSID = re.compile(r"<SharedTmpSid>(\d+)</SharedTmpSid>")
 _RE_TMPSID_JS = re.compile(r"_global_tmpsessionid\s*=\s*'(\d+)'")
@@ -152,17 +155,17 @@ class BintecOsdxClient:
             raise BintecOsdxAuthError("Login rejected (no userIdent returned)")
         self._uid = uid.group(1)
 
-        # The index shell occasionally comes back empty; retry before treating
-        # it as an auth failure (a genuinely wrong password fails every time).
+        # The index shell occasionally comes back empty; retry generously
+        # before treating it as an auth failure (wrong password fails every time).
         tmp = None
-        for attempt in range(5):
+        for attempt in range(10):
             shell = await self._text(
                 f"{self._base}/esi/0.0.0.0/esi.cgi?page=index.xml&userIdent={self._uid}"
             )
             tmp = _RE_TMPSID_JS.search(shell) or _RE_TMPSID.search(shell)
             if tmp:
                 break
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1.0)
         if not tmp:
             raise BintecOsdxAuthError("No session token after login (check password)")
         self._tmp = tmp.group(1)
@@ -172,15 +175,15 @@ class BintecOsdxClient:
 
     async def _poll_once(self) -> dict:
         """Pull stations + status using the current session."""
-        prev_tmp = self._tmp
         await self._data_page("navigation.xml")
-        if self._tmp == prev_tmp:
-            # AP returned login HTML (no SharedTmpSid) — session expired.
-            raise BintecOsdxError("Session token stale after navigation page — session expired")
         stations_xml = await self._data_page(*_PAGE_STATIONS)
         status_xml = await self._data_page(*_PAGE_STATUS)
+        # Both pages empty = AP hiccup or session expiry.
         if not stations_xml.strip() and not status_xml.strip():
             raise BintecOsdxError("Both data pages empty — session likely expired")
+        # Login form in data response = definite session expiry.
+        if _RE_LOGIN_PAGE.search(stations_xml) or _RE_LOGIN_PAGE.search(status_xml):
+            raise BintecOsdxError("Login page returned for data request — session expired")
         return {
             "stations": parse_stations(stations_xml),
             "status": parse_status(status_xml),
