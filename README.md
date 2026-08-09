@@ -52,3 +52,10 @@ pages over HTTP, threading the rolling `SharedTmpSid` token between requests.
 
 Community project, not affiliated with bintec‑elmeg / Teldat. Use on equipment
 you own/administer.
+
+## ☕ Support
+
+This is a free project built in spare time. If it saved you an evening, you can
+[buy me a coffee](https://ko-fi.com/zonya2026).
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/zonya2026)
